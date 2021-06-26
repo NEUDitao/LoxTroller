@@ -9,13 +9,13 @@
   ([left : Expr] [operator : token] [right : Expr]) #:transparent)
 
 (struct expr-grouping
-  ([expr : Expr]))
+  ([expr : Expr]) #:transparent)
 
 (struct expr-literal
-  ([value : Any]))
+  ([value : Any]) #:transparent)
 
 (struct expr-unary
-  ([operator : token] [right : Expr]))
+  ([operator : token] [right : Expr]) #:transparent)
 
 (: ast-printer : Expr -> String)
 (define (ast-printer expr)
@@ -24,7 +24,8 @@
                               (token-lexeme (expr-binary-operator expr))
                               (ast-printer (expr-binary-left expr))
                               (ast-printer (expr-binary-right expr)))]
-    [(? expr-grouping?) (format "(group ~a)" (expr-grouping-expr expr))]
+    [(? expr-grouping?) (format "(group ~a)"
+                                (ast-printer (expr-grouping-expr expr)))]
     [(? expr-literal?) (format "~a" (if (null? (expr-literal-value expr))
                                         "nil"
                                         (expr-literal-value expr)))]
@@ -34,7 +35,8 @@
 
 (module+ test
   (require typed/rackunit)
-  (check-equal? (ast-printer (expr-binary (expr-unary (token 'MINUS "-" null 1) (expr-literal 123))
+  (check-equal? (ast-printer (expr-binary (expr-unary (token 'MINUS "-" null 1)
+                                                      (expr-literal 123))
                              (token 'STAR "*" null 1)
-                             (expr-grouping (expr-literal 45.67)))
-                             "(* (- 123) (group 45.67))")))
+                             (expr-grouping (expr-literal 45.67))))
+                             "(* (- 123) (group 45.67))"))

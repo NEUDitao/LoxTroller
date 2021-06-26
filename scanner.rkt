@@ -1,13 +1,20 @@
-#lang typed/racket
+#lang racket
 
+(require racket/lazy-require)
 (require "token-type.rkt")
 (require "token.rkt")
-(require "lox.rkt")
+(lazy-require ["lox.rkt" (lox-error)])
+(provide scanner-scan)
 
-(: end? : String Integer -> Boolean)
+#;(: end? : String Integer -> Boolean)
 (define (end? source current) (>= current (string-length source)))
 
-(: scanner-scan-tokens : String Integer Integer -> [Listof token])
+#;(: scanner-scan : String -> [Listof token])
+;; scans source string starting from the beginning
+(define (scanner-scan source)
+  (scanner-scan-tokens source 0 1))
+
+#;(: scanner-scan-tokens : String Integer Integer -> [Listof token])
 ;; scans source starting from current/line
 (define (scanner-scan-tokens source current line)
   (cond
@@ -20,7 +27,7 @@
                (scanner-scan-tokens source curr next-line))
          (scanner-scan-tokens source curr next-line))]))
 
-(: scanner-scan-token : String Integer Integer ->
+#;(: scanner-scan-token : String Integer Integer ->
    (Values (U token Null) Integer Integer))
 ;; scans a single token and returns both the token and the current location of
 ;; the scanner. TokenType is null if we should skip to the next lexable token
@@ -28,10 +35,10 @@
   (define start current)
   (define curr-char (string-ref source current))
 
-  (: get-literal : Integer -> String)
+  #;(: get-literal : Integer -> String)
   (define (get-literal current) (substring source start (add1 current)))
 
-  (: =-based-lexemes : TokenType TokenType ->
+  #;(: =-based-lexemes : TokenType TokenType ->
      (Values token Integer Integer))
   ;; helper for lexemes that end in =
   (define (=-based-lexemes s1 s2)
@@ -40,14 +47,14 @@
                 (+ 2 current) line)
         (single-lexeme s2)))
 
-  (: find-newline : Integer -> Integer)
+  #;(: find-newline : Integer -> Integer)
   (define (find-newline current)
     (if (or (char=? (scanner-peek source current) #\newline)
             (end? source current))
         current
         (find-newline (add1 current))))
 
-  (: single-lexeme : TokenType -> (Values token Integer Integer))
+  #;(: single-lexeme : TokenType -> (Values token Integer Integer))
   (define (single-lexeme lexeme)
     (values (token lexeme (get-literal current) null line) (add1 current)
             line))
@@ -81,11 +88,11 @@
         (values null (add1 current) line)])]))
 
 (module+ test
-  (require typed/rackunit)
-  (check-equal? (scanner-scan-tokens "(" 0 1)
+  (require rackunit)
+  (check-equal? (scanner-scan "(")
                 (list (token 'LEFT_PAREN "(" null 1)
                       (token 'EOF "" null 1)))
-  (check-equal? (scanner-scan-tokens "(),.-" 0 1)
+  (check-equal? (scanner-scan "(),.-")
                 (list
                  (token 'LEFT_PAREN "(" '() 1)
                  (token 'RIGHT_PAREN ")" '() 1)
@@ -95,15 +102,15 @@
                  (token 'EOF "" '() 1)))
   (check-equal? (let* ([s (open-output-string)]
                        [error-output (parameterize ([current-error-port s])
-                                       (scanner-scan-tokens "@" 0 1))])
+                                       (scanner-scan "@"))])
                   (list error-output (get-output-string s)))
                 (list (list (token 'EOF "" '() 1))
                       "[line 1] Error: Unexpected character @."))
-  (check-equal? (scanner-scan-tokens "!!=" 0 1)
+  (check-equal? (scanner-scan "!!=")
                 (list (token 'BANG "!" '() 1)
                       (token 'BANG_EQUAL "!=" '() 1)
                       (token 'EOF "" '() 1)))
-  (check-equal? (scanner-scan-tokens "====<>>=" 0 1)
+  (check-equal? (scanner-scan "====<>>=")
                 (list
                  (token 'EQUAL_EQUAL "==" '() 1)
                  (token 'EQUAL_EQUAL "==" '() 1)
@@ -111,52 +118,52 @@
                  (token 'GREATER ">" '() 1)
                  (token 'GREATER_EQUAL ">=" '() 1)
                  (token 'EOF "" '() 1))               )
-  (check-equal? (scanner-scan-tokens "// this is a comment\n*" 0 1)
+  (check-equal? (scanner-scan "// this is a comment\n*")
                 (list (token 'STAR "*" '() 2)
                       (token 'EOF "" '() 2)))
-  (check-equal? (scanner-scan-tokens "+\n*" 0 1)
+  (check-equal? (scanner-scan "+\n*")
                 (list (token 'PLUS "+" '() 1)
                       (token 'STAR "*" '() 2)
                       (token 'EOF "" '() 2)))
-  (check-equal? (scanner-scan-tokens "{/  \t};" 0 1)
+  (check-equal? (scanner-scan "{/  \t};")
                 (list
                  (token 'LEFT_BRACE "{" '() 1)
                  (token 'SLASH "/" '() 1)
                  (token 'RIGHT_BRACE "}" '() 1)
                  (token 'SEMICOLON ";" '() 1)
                  (token 'EOF "" '() 1)))
-  (check-equal? (scanner-scan-tokens "//" 0 1)
+  (check-equal? (scanner-scan "//")
                 (list (token 'EOF "" '() 1)))
-  (check-equal? (scanner-scan-tokens "\"test\"" 0 1)
+  (check-equal? (scanner-scan "\"test\"")
                 (list (token 'STRING "test" "test" 1)
                       (token 'EOF "" '() 1)))
   (check-equal? (let* ([s (open-output-string)]
                        [error-output (parameterize ([current-error-port s])
-                                       (scanner-scan-tokens "\"" 0 1))])
+                                       (scanner-scan "\""))])
                   (list error-output (get-output-string s)))
                 (list (list (token 'EOF "" '() 1))
                       "[line 1] Error: Unterminated string."))
-  (check-equal? (scanner-scan-tokens "\"te\nst\"*" 0 1)
+  (check-equal? (scanner-scan "\"te\nst\"*")
                 (list
                  (token 'STRING "te\nst" "te\nst" 2)
                  (token 'STAR "*" '() 2)
                  (token 'EOF "" '() 2)))
-  (check-equal? (scanner-scan-tokens "69" 0 1)
+  (check-equal? (scanner-scan "69")
                 (list
                  (token 'NUMBER "69" 69 1)
                  (token 'EOF "" '() 1)))
-  (check-equal? (scanner-scan-tokens "4.20" 0 1)
+  (check-equal? (scanner-scan "4.20")
                 (list (token 'NUMBER "4.20" 4.2 1) (token 'EOF "" '() 1)))
-  (check-equal? (scanner-scan-tokens "42." 0 1)
+  (check-equal? (scanner-scan "42.")
                 (list (token 'NUMBER "42" 42 1)
                       (token 'DOT "." null 1)
                       (token 'EOF "" null 1)))
-  (check-equal? (scanner-scan-tokens "orifice or" 0 1)
+  (check-equal? (scanner-scan "orifice or")
                 (list (token 'IDENTIFIER "orifice" null 1)
                       (token 'OR "or" null 1)
                       (token 'EOF "" null 1)))
-  (check-equal? (scanner-scan-tokens "and class else false fun for if
-                        nil or print return super this true var while" 0 1)
+  (check-equal? (scanner-scan "and class else false fun for if
+                        nil or print return super this true var while")
                 (list
                  (token 'AND "and" '() 1)
                  (token 'CLASS "class" '() 1)
@@ -176,7 +183,7 @@
                  (token 'WHILE "while" '() 2)
                  (token 'EOF "" '() 2))))
 
-(: char-match? : Char String Integer -> Boolean)
+#;(: char-match? : Char String Integer -> Boolean)
 ;; determines if char at current in source is what's expected
 (define (char-match? expected source current)
   (and (not (end? source current))
@@ -186,12 +193,12 @@
   (check-true (char-match? #\= "fuck = true" 5))
   (check-false (char-match? #\= "fuck = true" 6)))
 
-(: scanner-peek : String Integer -> Char)
+#;(: scanner-peek : String Integer -> Char)
 ;; returns char at loc
 (define (scanner-peek source loc)
   (if (end? source loc) (integer->char 0) (string-ref source loc)))
 
-(: scanner-string : String Integer Integer Integer
+#;(: scanner-string : String Integer Integer Integer
    -> (Values (U token Null) Integer Integer))
 (define (scanner-string source start current line)
   (define next-char (scanner-peek source (add1 current)))
@@ -206,7 +213,7 @@
     [else (define substr (substring source (add1 start) (add1 current)))
           (values (token 'STRING substr substr line) (+ 2 current) line)]))
 
-(: scanner-number : String Integer Boolean Integer Integer ->
+#;(: scanner-number : String Integer Boolean Integer Integer ->
    (Values token Integer Integer))
 (define (scanner-number source start dec? current line)
   (define next-char (scanner-peek source (add1 current)))
@@ -221,7 +228,7 @@
           (values (token 'NUMBER substr (string->number substr) line)
                   (add1 current) line)]))
 
-(: scanner-identifier : String Integer Integer Integer ->
+#;(: scanner-identifier : String Integer Integer Integer ->
    (Values token Integer Integer))
 (define (scanner-identifier source start current line)
   (define next-char (scanner-peek source (add1 current)))
